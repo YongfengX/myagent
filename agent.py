@@ -1,6 +1,13 @@
 import re
-from api.qwen import chat
+from api.engine import get_chat_fn
 from tools.base_tools import TOOLS
+
+# ── 在这里选择 API 和模型 ──────────────────────────────────────────────────────
+API   = "qwen"       # 可选: "qwen" | 后续扩展: "openai" ...
+MODEL = "qwen-plus"  # 对应 API 下的模型名
+# ─────────────────────────────────────────────────────────────────────────────
+
+_chat = get_chat_fn(API)
 
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
@@ -41,7 +48,7 @@ def run_agent(user_input: str, max_steps: int = 10) -> str:
     ]
 
     for step in range(max_steps):
-        content = chat(messages)
+        content = _chat(messages, model=MODEL)
         messages.append({"role": "assistant", "content": content})
 
         print(f"\n[Step {step + 1}]\n{content}")
@@ -76,7 +83,7 @@ def run_agent(user_input: str, max_steps: int = 10) -> str:
 # ── CLI ────────────────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
-    print("ReAct Agent 已启动，输入 'quit' 退出\n")
+    print(f"ReAct Agent 已启动 [API: {API} | Model: {MODEL}]，输入 'quit' 退出\n")
     while True:
         user_input = input("你: ").strip()
         if user_input.lower() in ("quit", "exit", "退出"):
