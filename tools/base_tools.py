@@ -24,4 +24,15 @@ TOOLS: dict[str, dict] = {
         "description": "获取当前日期和时间",
         "params": "无需参数，传空字符串即可",
     },
+    # 记忆工具：func 在 agent 初始化时由 MemoryManager 注入
+    "save_memory": {
+        "func": None,
+        "description": "将重要信息存入长期记忆，跨会话持久保存",
+        "params": "要记住的内容字符串",
+    },
+    "search_memory": {
+        "func": None,
+        "description": "从长期记忆中检索相关信息",
+        "params": "检索关键词或问题",
+    },
 }

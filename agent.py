@@ -1,6 +1,7 @@
 import re
 from api.engine import get_chat_fn
 from tools.base_tools import TOOLS
+from memory.manager import MemoryManager
 
 # ── 在这里选择 API 和模型 ──────────────────────────────────────────────────────
 API   = "qwen"       # 可选: "qwen" | 后续扩展: "openai" ...
@@ -8,6 +9,11 @@ MODEL = "qwen-plus"  # 对应 API 下的模型名
 # ─────────────────────────────────────────────────────────────────────────────
 
 _chat = get_chat_fn(API)
+memory = MemoryManager(max_turns=10)
+
+# 将记忆工具的 func 绑定到 memory 实例
+TOOLS["save_memory"]["func"] = memory.save_to_long_term
+TOOLS["search_memory"]["func"] = memory.search_long_term
 
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
@@ -18,6 +24,9 @@ def build_system_prompt() -> str:
         for name, info in TOOLS.items()
     )
     return f"""你是一个 ReAct 式 AI 助手，通过"思考→行动→观察"循环来解决问题。
+你拥有长期记忆和短期记忆：
+- 短期记忆：当前对话窗口（最近 10 轮）
+- 长期记忆：跨会话持久存储，可用 save_memory / search_memory 工具操作
 
 可用工具：
 {tool_lines}
@@ -36,20 +45,21 @@ Final Answer: <最终答案>
 规则：
 - Action 必须是工具列表中的名称之一
 - 每次响应只能包含 Action 或 Final Answer，不能同时出现
-- 如果不需要工具，直接给出 Final Answer"""
+- 如果不需要工具，直接给出 Final Answer
+- 遇到值得记住的用户信息（姓名、偏好、重要事项等），主动调用 save_memory 保存"""
 
 
 # ── ReAct Loop ─────────────────────────────────────────────────────────────────
 
 def run_agent(user_input: str, max_steps: int = 10) -> str:
-    messages = [
-        {"role": "system", "content": build_system_prompt()},
-        {"role": "user", "content": user_input},
-    ]
+    # 每轮对话重新设置 system（会自动附加长期记忆摘要）
+    memory.set_system(build_system_prompt())
+    memory.add({"role": "user", "content": user_input})
 
     for step in range(max_steps):
+        messages = memory.get_messages()
         content = _chat(messages, model=MODEL)
-        messages.append({"role": "assistant", "content": content})
+        memory.add({"role": "assistant", "content": content})
 
         print(f"\n[Step {step + 1}]\n{content}")
 
@@ -75,7 +85,7 @@ def run_agent(user_input: str, max_steps: int = 10) -> str:
 
         observation_msg = f"Observation: {observation}"
         print(observation_msg)
-        messages.append({"role": "user", "content": observation_msg})
+        memory.add({"role": "user", "content": observation_msg})
 
     return "达到最大步骤数，未能得到最终答案。"
 
