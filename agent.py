@@ -1,42 +1,7 @@
-import os
 import re
-from datetime import datetime
-from dotenv import load_dotenv
-from openai import OpenAI
+from api.qwen import chat
+from tools.base_tools import TOOLS
 
-load_dotenv()
-
-client = OpenAI(
-    api_key=os.getenv("DASHSCOPE_API_KEY"),
-    base_url="https://dashscope-us.aliyuncs.com/compatible-mode/v1",
-)
-
-# ── Tools ──────────────────────────────────────────────────────────────────────
-
-def calculator(expression: str) -> str:
-    try:
-        result = eval(expression, {"__builtins__": {}})
-        return str(result)
-    except Exception as e:
-        return f"计算出错: {e}"
-
-
-def get_current_time(_: str = "") -> str:
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-
-TOOLS: dict[str, dict] = {
-    "calculator": {
-        "func": calculator,
-        "description": "计算数学表达式，返回结果",
-        "params": "数学表达式，例如 '(2 + 3) * 4'",
-    },
-    "get_current_time": {
-        "func": get_current_time,
-        "description": "获取当前日期和时间",
-        "params": "无需参数，传空字符串即可",
-    },
-}
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
 
@@ -76,12 +41,7 @@ def run_agent(user_input: str, max_steps: int = 10) -> str:
     ]
 
     for step in range(max_steps):
-        response = client.chat.completions.create(
-            model="qwen-plus",
-            messages=messages,
-            temperature=0,
-        )
-        content = response.choices[0].message.content.strip()
+        content = chat(messages)
         messages.append({"role": "assistant", "content": content})
 
         print(f"\n[Step {step + 1}]\n{content}")
@@ -96,7 +56,7 @@ def run_agent(user_input: str, max_steps: int = 10) -> str:
         input_match = re.search(r"Action Input[:：](.*)", content, re.DOTALL)
 
         if not action_match:
-            return content  # 模型没有按格式输出，直接返回
+            return content
 
         tool_name = action_match.group(1).strip()
         tool_input = input_match.group(1).strip() if input_match else ""
