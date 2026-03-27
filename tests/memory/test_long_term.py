@@ -1,6 +1,4 @@
 import pytest
-import tempfile
-import os
 from memory.long_term import LongTermMemory
 
 
