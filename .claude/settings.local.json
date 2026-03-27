@@ -4,7 +4,17 @@
       "Bash(uv init:*)",
       "Bash(uv venv:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(uv add:*)",
+      "Bash(git worktree:*)",
+      "Read(//Users/feierkang/.config/superpowers/worktrees/myagent/rag-memory/**)",
+      "Bash(uv sync:*)",
+      "Bash(uv run:*)",
+      "Bash(uv python:*)",
+      "Bash(cd:*)",
+      "Bash(md5)",
+      "Bash(git stash:*)",
+      "Bash(git merge:*)"
     ]
   }
 }

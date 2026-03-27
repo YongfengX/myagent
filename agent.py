@@ -1,6 +1,7 @@
 import re
 from api.engine import get_chat_fn
 from tools.base_tools import TOOLS
+from tools.mcp_loader import load_mcp_tools
 from memory.manager import MemoryManager
 
 # ── 在这里选择 API 和模型 ──────────────────────────────────────────────────────
@@ -10,6 +11,9 @@ MODEL = "qwen-plus"  # 对应 API 下的模型名
 
 _chat = get_chat_fn(API)
 memory = MemoryManager(max_turns=10)
+
+# 加载 MCP Server 工具（mcp_servers.json 中配置）
+TOOLS.update(load_mcp_tools())
 
 # 将记忆工具的 func 绑定到 memory 实例
 TOOLS["save_memory"]["func"] = memory.save_to_long_term
