@@ -11,3 +11,9 @@ wheels/
 
 # Environment variables
 .env
+
+# Git worktrees
+.worktrees/
+
+# Superpowers brainstorm sessions
+.superpowers/
