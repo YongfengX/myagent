@@ -1,4 +1,5 @@
 import re
+from typing import Generator, Union
 from api.engine import get_chat_fn
 from tools.base_tools import TOOLS
 from tools.mcp_loader import load_mcp_tools
@@ -81,7 +82,7 @@ def _run_agent_gen(user_input: str, max_steps: int, mem: MemoryManager):
 
         # 提取 Thought
         thought_match = re.search(
-            r"Thought[:：](.*?)(?=Action:|Final Answer:|$)", content, re.DOTALL
+            r"Thought[:：](.*?)(?=Action:|Final Answer:|\Z)", content, re.DOTALL
         )
         if thought_match:
             yield {"type": "thought", "content": thought_match.group(1).strip()}
@@ -122,7 +123,7 @@ def _run_agent_gen(user_input: str, max_steps: int, mem: MemoryManager):
 # ── ReAct Loop（公开接口）──────────────────────────────────────────────────────
 
 def run_agent(user_input: str, max_steps: int = 10,
-              memory: MemoryManager = None, stream: bool = False):
+              memory: MemoryManager = None, stream: bool = False) -> Union[str, Generator[dict, None, None]]:
     """
     运行 ReAct Agent。
     - memory=None 时使用模块级全局 _memory（CLI 模式）
