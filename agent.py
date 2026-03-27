@@ -10,14 +10,14 @@ MODEL = "qwen-plus"  # 对应 API 下的模型名
 # ─────────────────────────────────────────────────────────────────────────────
 
 _chat = get_chat_fn(API)
-memory = MemoryManager(max_turns=10)
+_memory = MemoryManager(max_turns=10)
 
 # 加载 MCP Server 工具（mcp_servers.json 中配置）
 TOOLS.update(load_mcp_tools())
 
-# 将记忆工具的 func 绑定到 memory 实例
-TOOLS["save_memory"]["func"] = memory.save_to_long_term
-TOOLS["search_memory"]["func"] = memory.search_long_term
+# 将记忆工具的 func 绑定到全局 _memory（CLI 默认）
+TOOLS["save_memory"]["func"] = _memory.save_to_long_term
+TOOLS["search_memory"]["func"] = _memory.search_long_term
 
 
 # ── Prompt ─────────────────────────────────────────────────────────────────────
@@ -53,45 +53,96 @@ Final Answer: <最终答案>
 - 遇到值得记住的用户信息（姓名、偏好、重要事项等），主动调用 save_memory 保存"""
 
 
-# ── ReAct Loop ─────────────────────────────────────────────────────────────────
+# ── 内部 generator（核心 ReAct 循环）──────────────────────────────────────────
 
-def run_agent(user_input: str, max_steps: int = 10) -> str:
-    # 每轮对话重新设置 system（会自动附加长期记忆摘要）
-    memory.set_system(build_system_prompt())
-    memory.add({"role": "user", "content": user_input})
+def _run_agent_gen(user_input: str, max_steps: int, mem: MemoryManager):
+    """
+    核心 ReAct 循环，始终作为 generator 运行。
+    每步 yield {"type": "thought"|"action"|"observation"|"answer", "content": str}
+    """
+    # 构建局部 TOOLS，将记忆工具绑定到传入的 mem 实例
+    local_tools = {**TOOLS}
+    local_tools["save_memory"] = {
+        **TOOLS["save_memory"],
+        "func": mem.save_to_long_term,
+    }
+    local_tools["search_memory"] = {
+        **TOOLS["search_memory"],
+        "func": mem.search_long_term,
+    }
+
+    mem.set_system(build_system_prompt())
+    mem.add({"role": "user", "content": user_input})
 
     for step in range(max_steps):
-        messages = memory.get_messages()
+        messages = mem.get_messages()
         content = _chat(messages, model=MODEL)
-        memory.add({"role": "assistant", "content": content})
+        mem.add({"role": "assistant", "content": content})
 
-        print(f"\n[Step {step + 1}]\n{content}")
+        # 提取 Thought
+        thought_match = re.search(
+            r"Thought[:：](.*?)(?=Action:|Final Answer:|$)", content, re.DOTALL
+        )
+        if thought_match:
+            yield {"type": "thought", "content": thought_match.group(1).strip()}
 
         # Final Answer
         if "Final Answer:" in content:
             match = re.search(r"Final Answer[:：](.*)", content, re.DOTALL)
-            return match.group(1).strip() if match else content
+            answer = match.group(1).strip() if match else content
+            yield {"type": "answer", "content": answer}
+            return
 
         # Action
         action_match = re.search(r"Action[:：]\s*(\w+)", content)
         input_match = re.search(r"Action Input[:：](.*)", content, re.DOTALL)
 
         if not action_match:
-            return content
+            yield {"type": "answer", "content": content}
+            return
 
         tool_name = action_match.group(1).strip()
         tool_input = input_match.group(1).strip() if input_match else ""
 
-        if tool_name not in TOOLS:
-            observation = f"错误：工具 '{tool_name}' 不存在，可用工具：{list(TOOLS.keys())}"
+        yield {"type": "action", "content": f"{tool_name}({tool_input})"}
+
+        if tool_name not in local_tools:
+            observation = f"错误：工具 '{tool_name}' 不存在，可用工具：{list(local_tools.keys())}"
         else:
-            observation = TOOLS[tool_name]["func"](tool_input)
+            observation = local_tools[tool_name]["func"](tool_input)
+
+        yield {"type": "observation", "content": str(observation)}
 
         observation_msg = f"Observation: {observation}"
-        print(observation_msg)
-        memory.add({"role": "user", "content": observation_msg})
+        mem.add({"role": "user", "content": observation_msg})
 
-    return "达到最大步骤数，未能得到最终答案。"
+    yield {"type": "answer", "content": "达到最大步骤数，未能得到最终答案。"}
+
+
+# ── ReAct Loop（公开接口）──────────────────────────────────────────────────────
+
+def run_agent(user_input: str, max_steps: int = 10,
+              memory: MemoryManager = None, stream: bool = False):
+    """
+    运行 ReAct Agent。
+    - memory=None 时使用模块级全局 _memory（CLI 模式）
+    - stream=False（默认）：阻塞式，返回最终答案字符串
+    - stream=True：返回 generator，逐步 yield ReAct 步骤 dict
+    """
+    mem = memory if memory is not None else _memory
+    gen = _run_agent_gen(user_input, max_steps, mem)
+
+    if stream:
+        return gen
+
+    # 非 stream：消费 generator，返回最终答案
+    answer = "（无答案）"
+    for step in gen:
+        if step["type"] == "answer":
+            answer = step["content"]
+        elif step["type"] in ("thought", "action", "observation"):
+            print(f"\n[{step['type'].upper()}] {step['content']}")
+    return answer
 
 
 # ── CLI ────────────────────────────────────────────────────────────────────────
