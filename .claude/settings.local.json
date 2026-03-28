@@ -14,7 +14,17 @@
       "Bash(cd:*)",
       "Bash(md5)",
       "Bash(git stash:*)",
-      "Bash(git merge:*)"
+      "Bash(git merge:*)",
+      "Bash(git checkout:*)",
+      "Bash(git branch:*)",
+      "Bash(wc:*)",
+      "Read(//Users/feierkang/.claude/plugins/cache/claude-plugins-official/superpowers/5.0.6/**)",
+      "Bash(bash scripts/start-server.sh --project-dir /Users/feierkang/Desktop/UCSD/myagent)",
+      "Bash(python:*)",
+      "Bash(find /Users/feierkang/Desktop/UCSD/myagent/.worktrees/gradio-frontend/docs -name *.md)",
+      "Bash(git -C /Users/feierkang/Desktop/UCSD/myagent/.worktrees/gradio-frontend show 93f4f52:app.py)",
+      "Bash(git:*)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }
