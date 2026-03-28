@@ -1,9 +1,11 @@
 import gradio as gr
 from memory.manager import MemoryManager
-from agent import run_agent, build_system_prompt
+from agent import run_agent
 
 # ── Session 存储 ────────────────────────────────────────────────────────────────
 # 结构: {session_name: {"memory": MemoryManager, "history": [(user, answer), ...]}}
+# NOTE: sessions 为模块级全局 dict，设计上仅支持本地单用户。
+# 多浏览器 tab 会共享同一 sessions 对象（本地使用场景下可接受）。
 sessions: dict[str, dict] = {}
 
 
@@ -33,18 +35,24 @@ def chat_handler(message: str, history: list, session_name: str, reasoning: str)
     mem = sessions[session_name]["memory"]
     current_reasoning = ""
 
-    for step in run_agent(message, memory=mem, stream=True):
-        if step["type"] in ("thought", "action", "observation"):
-            current_reasoning += f"[{step['type'].upper()}] {step['content']}\n"
-            yield history, current_reasoning, message
-        elif step["type"] == "answer":
-            new_history = history + [[message, step["content"]]]
-            sessions[session_name]["history"] = new_history
-            yield new_history, current_reasoning, ""
+    try:
+        for step in run_agent(message, memory=mem, stream=True):
+            if step["type"] in ("thought", "action", "observation"):
+                current_reasoning += f"[{step['type'].upper()}] {step['content']}\n"
+                yield history, current_reasoning, message
+            elif step["type"] == "answer":
+                new_history = history + [[message, step["content"]]]
+                sessions[session_name]["history"] = new_history
+                yield new_history, current_reasoning, ""
+    except Exception as e:
+        error_msg = f"[错误] {type(e).__name__}: {e}"
+        error_history = history + [[message, error_msg]]
+        sessions[session_name]["history"] = error_history
+        yield error_history, current_reasoning, ""
 
 
 def get_memory_display(session_name: str) -> str:
-    """返回当前 session 的长期记忆摘要。"""
+    """返回长期记忆摘要（跨 session 共享，存储于 ChromaDB）。"""
     if session_name not in sessions:
         return "（无记忆）"
     mem = sessions[session_name]["memory"]
