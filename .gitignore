@@ -17,3 +17,6 @@ wheels/
 
 # Superpowers brainstorm sessions
 .superpowers/
+
+# ChromaDB runtime data
+memory/chroma_store/
