@@ -47,3 +47,40 @@ def test_run_agent_memory_tools_bound_to_passed_memory():
     # save_to_long_term 应在传入的 mock_mem 上被调用
     mock_mem.save_to_long_term.assert_called_once_with("test content")
     assert result == "saved"
+
+
+def test_run_agent_stream_yields_steps():
+    """stream=True 时应 yield thought/action/observation/answer 步骤。"""
+    from agent import run_agent
+
+    mock_mem = make_mock_memory()
+
+    with patch("agent._chat") as mock_chat:
+        mock_chat.side_effect = [
+            "Thought: 需要计算\nAction: calculator\nAction Input: 1+1",
+            "Thought: 得到结果\nFinal Answer: 2",
+        ]
+        steps = list(run_agent("1+1 等于多少", memory=mock_mem, stream=True))
+
+    types = [s["type"] for s in steps]
+    assert "thought" in types
+    assert "action" in types
+    assert "observation" in types
+    assert "answer" in types
+    # 最后一步是 answer
+    assert steps[-1]["type"] == "answer"
+    assert steps[-1]["content"] == "2"
+
+
+def test_run_agent_stream_false_returns_string():
+    """stream=False（默认）应返回字符串而非 generator。"""
+    from agent import run_agent
+
+    mock_mem = make_mock_memory()
+
+    with patch("agent._chat") as mock_chat:
+        mock_chat.return_value = "Thought: simple\nFinal Answer: hello"
+        result = run_agent("hello", memory=mock_mem, stream=False)
+
+    assert isinstance(result, str)
+    assert result == "hello"
